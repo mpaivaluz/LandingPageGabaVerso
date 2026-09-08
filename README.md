@@ -22,7 +22,8 @@ assets/      -> coloque aqui o avatar.png
 | Instagram | `https://www.instagram.com/gaba_verso` |
 | TikTok | `https://www.tiktok.com/@gabaverso` |
 | Twitch | `https://www.twitch.tv/gabaversoo` |
-| Vídeo em destaque | ID `b5lHGqSEki0` |
+| Canal (ID) | `UCOUBY6WToeg7yZuasla_uqA` |
+| Vídeo reserva | ID `b5lHGqSEki0` |
 
 ## O que ainda falta
 
@@ -34,9 +35,38 @@ Está marcado com `<!-- TROQUE ... -->` no `index.html`:
 | E-mail | `contato@gabaverso.com` → seu e-mail de parcerias. |
 | Seção "Sobre mim" | Textos, números das estatísticas e as tags de gênero. |
 
-### Trocar o vídeo em destaque
-Pegue o ID na URL do YouTube (o que vem depois de `watch?v=`) e troque em **três lugares**
-do bloco `.video-embed`: no `data-id` e nos dois links da miniatura (`src` e `onerror`).
+## Último vídeo (automático)
+
+A seção do vídeo **se atualiza sozinha**: um script lê o feed RSS público da aba **Vídeos**
+do canal e coloca o vídeo mais recente na capa. Você posta no YouTube e a página acompanha —
+sem mexer em nada.
+
+O feed usado é o da playlist `UULFOUBY6WToeg7yZuasla_uqA`, que é a aba Vídeos — **lives e
+Shorts ficam de fora**. O ID sai do ID do canal trocando o prefixo `UC` por:
+
+| Prefixo | Aba do canal |
+|---|---|
+| `UULF` | Vídeos (em uso) |
+| `UUSH` | Shorts |
+| `UULV` | Ao vivo |
+| `UU` | tudo junto |
+
+Pra mudar, é só trocar o prefixo no `data-playlist` do `<div class="video-embed">`.
+
+Detalhes de como funciona:
+
+- **Sem chave de API.** O feed é público e não tem cota pra estourar.
+- **Passa por um leitor de RSS** (`rss2json`, com `allorigins` de reserva) porque o YouTube
+  não libera esse feed direto pro navegador (bloqueio de CORS). São serviços gratuitos e
+  de terceiros — se um sair do ar, entra o outro.
+- **Se os dois falharem**, fica o vídeo reserva do `data-id` e a página segue normal.
+- **Cache de 30 minutos** no navegador do visitante: quem volta vê a capa na hora, sem
+  nova consulta.
+- **O player só carrega ao clicar**, então nada disso pesa na abertura da página.
+
+Se algum dia quiser fixar um vídeo específico em vez do mais recente, remova o
+atributo `data-playlist` do `<div class="video-embed">` e deixe só o `data-id` com o vídeo
+escolhido.
 
 ## Como colocar no ar (grátis)
 

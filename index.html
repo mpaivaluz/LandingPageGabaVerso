@@ -73,23 +73,39 @@
     <p class="cta-note">Grátis · Sem spam · Só promoção que vale a pena</p>
   </section>
 
-  <!-- ==================== VÍDEO EM DESTAQUE ==================== -->
+  <!-- ==================== ÚLTIMO VÍDEO (automático) ==================== -->
   <section class="video-block reveal" aria-labelledby="video-title">
-    <h2 class="section-title" id="video-title"><span>Vídeo em destaque</span></h2>
+    <h2 class="section-title" id="video-title"><span>Último vídeo</span></h2>
 
-    <!-- TROQUE O ID DO VÍDEO em data-id (o que vem depois de "watch?v=") -->
-    <div class="video-embed" data-id="b5lHGqSEki0" data-title="Vídeo em destaque do Gabaverso">
-      <button class="video-play" type="button" aria-label="Assistir ao vídeo no player">
+    <!--
+      data-playlist = lista que o script acompanha. Aqui está a aba "Vídeos" do canal,
+                      ou seja, SEM lives e SEM Shorts. É o ID do canal com a troca do
+                      prefixo "UC" por:
+                        UULF -> aba Vídeos (o que está em uso)
+                        UUSH -> aba Shorts
+                        UULV -> aba Ao vivo
+                        UU   -> tudo junto
+      data-id       = vídeo reserva, usado só se o feed não responder
+    -->
+    <div class="video-embed"
+         data-playlist="UULFOUBY6WToeg7yZuasla_uqA"
+         data-id="b5lHGqSEki0"
+         data-title="Último vídeo do Gabaverso">
+      <button class="video-play" type="button" aria-label="Assistir ao último vídeo">
         <img class="video-thumb"
              src="https://i.ytimg.com/vi/b5lHGqSEki0/maxresdefault.jpg"
-             onerror="this.src='https://i.ytimg.com/vi/b5lHGqSEki0/hqdefault.jpg'"
-             alt="Miniatura do vídeo em destaque" loading="lazy" width="1280" height="720">
+             alt="Miniatura do último vídeo" loading="lazy" width="1280" height="720">
         <span class="video-btn" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v13.72L19 12 8 5.14z"/></svg>
         </span>
         <span class="video-label" aria-hidden="true">Assistir agora</span>
       </button>
     </div>
+
+    <p class="video-meta">
+      <span class="video-caption">Direto do canal, sempre o mais recente</span>
+      <a class="video-all" href="https://www.youtube.com/@gabaverso/videos" target="_blank" rel="noopener">ver todos →</a>
+    </p>
   </section>
 
   <!-- ==================== REDES SOCIAIS ==================== -->
@@ -190,6 +206,106 @@
     el.style.setProperty('--d', (i * 80) + 'ms');
     io.observe(el);
   });
+
+  // ---------------------------------------------------------------
+  // ÚLTIMO VÍDEO: lê o feed público da aba "Vídeos" do canal e atualiza
+  // a capa sozinho. Sem chave de API. Se o feed não responder, fica o
+  // vídeo reserva (data-id) — a página nunca quebra por causa disso.
+  // ---------------------------------------------------------------
+  (function () {
+    var box = document.querySelector('.video-embed[data-playlist]');
+    if (!box || !window.fetch) return;
+
+    var LISTA = box.dataset.playlist;
+    var CACHE = 'gv_ultimo_video_v2';   /* trocar o nome invalida o cache antigo dos visitantes */
+    var VALIDADE = 30 * 60 * 1000;              // 30 min de cache no navegador
+    var FEED = 'https://www.youtube.com/feeds/videos.xml?playlist_id=' + LISTA;
+
+    var img = box.querySelector('.video-thumb');
+    var caption = document.querySelector('.video-caption');
+
+    // o feed do YouTube não libera acesso direto pelo navegador (CORS),
+    // então passamos por um leitor público de RSS; o segundo é reserva
+    var FONTES = [
+      { url: 'https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(FEED), parse: lerJson },
+      { url: 'https://api.allorigins.win/raw?url=' + encodeURIComponent(FEED), parse: lerXml }
+    ];
+
+    function lerJson(txt) {
+      var d = JSON.parse(txt);
+      if (d.status !== 'ok' || !d.items || !d.items.length) throw new Error('feed vazio');
+      return d.items.map(function (i) {
+        return {
+          id: String(i.guid || '').replace('yt:video:', ''),
+          titulo: i.title,
+          data: new Date(String(i.pubDate).replace(' ', 'T') + 'Z')
+        };
+      });
+    }
+
+    function lerXml(txt) {
+      var doc = new DOMParser().parseFromString(txt, 'text/xml');
+      var entradas = Array.prototype.slice.call(doc.getElementsByTagName('entry'));
+      if (!entradas.length) throw new Error('feed vazio');
+      return entradas.map(function (e) {
+        function campo(nome) {
+          var n = e.getElementsByTagNameNS('*', nome)[0];
+          return n ? n.textContent : '';
+        }
+        return { id: campo('videoId'), titulo: campo('title'), data: new Date(campo('published')) };
+      });
+    }
+
+    function buscar(url) {
+      var ctl = new AbortController();
+      var t = setTimeout(function () { ctl.abort(); }, 7000);
+      return fetch(url, { signal: ctl.signal }).then(function (r) {
+        clearTimeout(t);
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text();
+      });
+    }
+
+    function aplicar(v) {
+      if (!v || !v.id) return;
+      box.dataset.id = v.id;
+      img.onerror = function () {
+        this.onerror = null;
+        this.src = 'https://i.ytimg.com/vi/' + v.id + '/hqdefault.jpg';
+      };
+      img.src = 'https://i.ytimg.com/vi/' + v.id + '/maxresdefault.jpg';
+      if (v.titulo) {
+        img.alt = 'Miniatura do vídeo: ' + v.titulo;
+        if (caption) caption.textContent = v.titulo;
+      }
+    }
+
+    // 1) mostra na hora o que já estava salvo da visita anterior
+    try {
+      var salvo = JSON.parse(localStorage.getItem(CACHE) || 'null');
+      if (salvo && salvo.id) {
+        aplicar(salvo);
+        if (Date.now() - salvo.em < VALIDADE) return;   // ainda fresco, nem consulta
+      }
+    } catch (e) { /* localStorage bloqueado: segue e consulta o feed */ }
+
+    // 2) consulta o feed e guarda o resultado
+    (function tentar(i) {
+      if (i >= FONTES.length) return;
+      buscar(FONTES[i].url)
+        .then(FONTES[i].parse)
+        .then(function (lista) {
+          var novo = lista.filter(function (v) { return v.id; })
+                          .sort(function (a, b) { return b.data - a.data; })[0];
+          if (!novo) throw new Error('sem vídeos');
+          aplicar(novo);
+          try {
+            localStorage.setItem(CACHE, JSON.stringify({ id: novo.id, titulo: novo.titulo, em: Date.now() }));
+          } catch (e) { /* sem localStorage: tudo bem */ }
+        })
+        .catch(function () { tentar(i + 1); });
+    })(0);
+  })();
 
   // vídeo: só carrega o player do YouTube quando clicar (página abre leve)
   document.querySelectorAll('.video-embed').forEach(function (box) {
