@@ -114,7 +114,7 @@ section, header { margin-bottom: 44px; }
   width: 100%; height: 100%;
   border-radius: 50%;
   overflow: hidden;
-  background: linear-gradient(140deg, #6d3bf5, #b23ff8 45%, #f83fa8);
+  background: var(--blue);
   border: 4px solid var(--bg);
 }
 /* letra que aparece enquanto não houver assets/avatar.png */
