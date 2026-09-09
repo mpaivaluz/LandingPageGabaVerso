@@ -41,8 +41,8 @@ A seção do vídeo **se atualiza sozinha**: um script lê o feed RSS público d
 do canal e coloca o vídeo mais recente na capa. Você posta no YouTube e a página acompanha —
 sem mexer em nada.
 
-O feed usado é o da playlist `UULFOUBY6WToeg7yZuasla_uqA`, que é a aba Vídeos — **lives e
-Shorts ficam de fora**. O ID sai do ID do canal trocando o prefixo `UC` por:
+O feed usado é o da playlist `UULFOUBY6WToeg7yZuasla_uqA`, que é a aba Vídeos — **lives já
+ficam de fora dela**. O ID sai do ID do canal trocando o prefixo `UC` por:
 
 | Prefixo | Aba do canal |
 |---|---|
@@ -50,6 +50,12 @@ Shorts ficam de fora**. O ID sai do ID do canal trocando o prefixo `UC` por:
 | `UUSH` | Shorts |
 | `UULV` | Ao vivo |
 | `UU` | tudo junto |
+
+**Shorts:** o YouTube também lista os Shorts publicados dentro dessa mesma aba Vídeos, então
+trocar de playlist não resolve. O script descarta esses itens de outro jeito: cada vídeo do
+feed vem com um link, e um Short sempre aponta pra `youtube.com/shorts/ID`, enquanto vídeo
+normal aponta pra `youtube.com/watch?v=ID` — o script ignora qualquer item com `/shorts/` no
+link e escolhe o mais recente entre o que sobrar.
 
 Pra mudar, é só trocar o prefixo no `data-playlist` do `<div class="video-embed">`.
 

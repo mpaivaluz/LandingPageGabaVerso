@@ -79,12 +79,15 @@
 
     <!--
       data-playlist = lista que o script acompanha. Aqui está a aba "Vídeos" do canal,
-                      ou seja, SEM lives e SEM Shorts. É o ID do canal com a troca do
-                      prefixo "UC" por:
+                      que já não traz lives. É o ID do canal com a troca do prefixo
+                      "UC" por:
                         UULF -> aba Vídeos (o que está em uso)
                         UUSH -> aba Shorts
                         UULV -> aba Ao vivo
                         UU   -> tudo junto
+                      Shorts publicados também aparecem nessa lista (o YouTube os
+                      mistura ali), então o script ainda descarta pelo link de cada
+                      item: "/shorts/ID" é Short, "watch?v=ID" é vídeo normal.
       data-id       = vídeo reserva, usado só se o feed não responder
     -->
     <div class="video-embed"
@@ -217,7 +220,7 @@
     if (!box || !window.fetch) return;
 
     var LISTA = box.dataset.playlist;
-    var CACHE = 'gv_ultimo_video_v2';   /* trocar o nome invalida o cache antigo dos visitantes */
+    var CACHE = 'gv_ultimo_video_v3';   /* trocar o nome invalida o cache antigo dos visitantes */
     var VALIDADE = 30 * 60 * 1000;              // 30 min de cache no navegador
     var FEED = 'https://www.youtube.com/feeds/videos.xml?playlist_id=' + LISTA;
 
@@ -231,16 +234,21 @@
       { url: 'https://api.allorigins.win/raw?url=' + encodeURIComponent(FEED), parse: lerXml }
     ];
 
+    // um Short tem link "youtube.com/shorts/ID"; vídeo normal tem "watch?v=ID"
+    function ehShort(link) { return /\/shorts\//.test(link || ''); }
+
     function lerJson(txt) {
       var d = JSON.parse(txt);
       if (d.status !== 'ok' || !d.items || !d.items.length) throw new Error('feed vazio');
-      return d.items.map(function (i) {
-        return {
-          id: String(i.guid || '').replace('yt:video:', ''),
-          titulo: i.title,
-          data: new Date(String(i.pubDate).replace(' ', 'T') + 'Z')
-        };
-      });
+      return d.items
+        .filter(function (i) { return !ehShort(i.link); })
+        .map(function (i) {
+          return {
+            id: String(i.guid || '').replace('yt:video:', ''),
+            titulo: i.title,
+            data: new Date(String(i.pubDate).replace(' ', 'T') + 'Z')
+          };
+        });
     }
 
     function lerXml(txt) {
@@ -252,8 +260,14 @@
           var n = e.getElementsByTagNameNS('*', nome)[0];
           return n ? n.textContent : '';
         }
-        return { id: campo('videoId'), titulo: campo('title'), data: new Date(campo('published')) };
-      });
+        var link = e.getElementsByTagName('link')[0];
+        return {
+          id: campo('videoId'),
+          titulo: campo('title'),
+          data: new Date(campo('published')),
+          link: link ? link.getAttribute('href') : ''
+        };
+      }).filter(function (v) { return !ehShort(v.link); });
     }
 
     function buscar(url) {
