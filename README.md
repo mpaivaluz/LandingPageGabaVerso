@@ -62,11 +62,18 @@ Pra mudar, é só trocar o prefixo no `data-playlist` do `<div class="video-embe
 Detalhes de como funciona:
 
 - **Sem chave de API.** O feed é público e não tem cota pra estourar.
-- **Passa por um leitor de RSS** (`rss2json`, com `allorigins` de reserva) porque o YouTube
-  não libera esse feed direto pro navegador (bloqueio de CORS). São serviços gratuitos e
-  de terceiros — se um sair do ar, entra o outro.
-- **Se os dois falharem**, fica o vídeo reserva do `data-id` e a página segue normal.
-- **Cache de 30 minutos** no navegador do visitante: quem volta vê a capa na hora, sem
+- **GitHub Actions busca o feed** a cada 15 min
+  ([`.github/workflows/ultimo-video.yml`](.github/workflows/ultimo-video.yml)) e grava o
+  vídeo mais recente em `ultimo-video.json`, que a página lê do próprio site. Só faz commit
+  quando muda o vídeo. Pra forçar na hora: aba **Actions → Último vídeo → Run workflow**.
+  Isso só funciona se o site for publicado a partir deste repositório (GitHub Pages, ou
+  Netlify/Vercel ligados ao repo) — com Netlify Drop o arquivo não se atualiza.
+- **Leitores de RSS de reserva** (`rss2json` e `allorigins`), porque o YouTube não libera o
+  feed direto pro navegador (bloqueio de CORS). São gratuitos e instáveis — o `rss2json`
+  chegou a servir uma cópia velha do feed —, então a página consulta todas as fontes e
+  fica com o vídeo **mais novo** que qualquer uma trouxer.
+- **Se tudo falhar**, fica o vídeo reserva do `data-id` e a página segue normal.
+- **Cache de 10 minutos** no navegador do visitante: quem volta vê a capa na hora, sem
   nova consulta.
 - **O player só carrega ao clicar**, então nada disso pesa na abertura da página.
 

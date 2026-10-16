@@ -211,31 +211,39 @@
   });
 
   // ---------------------------------------------------------------
-  // ÚLTIMO VÍDEO: lê o feed público da aba "Vídeos" do canal e atualiza
-  // a capa sozinho. Sem chave de API. Se o feed não responder, fica o
-  // vídeo reserva (data-id) — a página nunca quebra por causa disso.
+  // ÚLTIMO VÍDEO: o GitHub Actions lê o feed da aba "Vídeos" do canal a
+  // cada 15 min e grava ultimo-video.json aqui no site. Os leitores de RSS
+  // públicos ficam de reserva. Vale o vídeo mais novo que qualquer fonte
+  // trouxer; se nenhuma responder, fica o vídeo reserva (data-id).
   // ---------------------------------------------------------------
   (function () {
     var box = document.querySelector('.video-embed[data-playlist]');
     if (!box || !window.fetch) return;
 
     var LISTA = box.dataset.playlist;
-    var CACHE = 'gv_ultimo_video_v3';   /* trocar o nome invalida o cache antigo dos visitantes */
-    var VALIDADE = 30 * 60 * 1000;              // 30 min de cache no navegador
+    var CACHE = 'gv_ultimo_video_v4';   /* trocar o nome invalida o cache antigo dos visitantes */
+    var VALIDADE = 10 * 60 * 1000;              // 10 min de cache no navegador
     var FEED = 'https://www.youtube.com/feeds/videos.xml?playlist_id=' + LISTA;
 
     var img = box.querySelector('.video-thumb');
     var caption = document.querySelector('.video-caption');
 
-    // o feed do YouTube não libera acesso direto pelo navegador (CORS),
-    // então passamos por um leitor público de RSS; o segundo é reserva
+    // 1ª fonte: arquivo gerado pelo GitHub Actions, mesmo domínio, sem CORS.
+    // As outras passam por leitores públicos de RSS (o YouTube não libera
+    // o feed direto pro navegador) e só valem se trouxerem algo mais novo.
     var FONTES = [
+      { url: 'ultimo-video.json', parse: lerLocal, opcoes: { cache: 'no-cache' } },
       { url: 'https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(FEED), parse: lerJson },
       { url: 'https://api.allorigins.win/raw?url=' + encodeURIComponent(FEED), parse: lerXml }
     ];
 
     // um Short tem link "youtube.com/shorts/ID"; vídeo normal tem "watch?v=ID"
     function ehShort(link) { return /\/shorts\//.test(link || ''); }
+
+    function lerLocal(txt) {
+      var d = JSON.parse(txt);
+      return [{ id: d.id, titulo: d.titulo, data: new Date(d.data) }];
+    }
 
     function lerJson(txt) {
       var d = JSON.parse(txt);
@@ -270,10 +278,12 @@
       }).filter(function (v) { return !ehShort(v.link); });
     }
 
-    function buscar(url) {
+    function buscar(url, opcoes) {
       var ctl = new AbortController();
       var t = setTimeout(function () { ctl.abort(); }, 7000);
-      return fetch(url, { signal: ctl.signal }).then(function (r) {
+      var o = opcoes || {};
+      o.signal = ctl.signal;
+      return fetch(url, o).then(function (r) {
         clearTimeout(t);
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.text();
@@ -294,31 +304,34 @@
       }
     }
 
+    var atual = null;   // vídeo na capa: { id, titulo, data (ms), em (ms) }
+
     // 1) mostra na hora o que já estava salvo da visita anterior
     try {
       var salvo = JSON.parse(localStorage.getItem(CACHE) || 'null');
       if (salvo && salvo.id) {
+        atual = salvo;
         aplicar(salvo);
         if (Date.now() - salvo.em < VALIDADE) return;   // ainda fresco, nem consulta
       }
-    } catch (e) { /* localStorage bloqueado: segue e consulta o feed */ }
+    } catch (e) { /* localStorage bloqueado: segue e consulta as fontes */ }
 
-    // 2) consulta o feed e guarda o resultado
-    (function tentar(i) {
-      if (i >= FONTES.length) return;
-      buscar(FONTES[i].url)
-        .then(FONTES[i].parse)
+    // 2) consulta todas as fontes juntas; troca a capa só se vier algo mais novo
+    FONTES.forEach(function (f) {
+      buscar(f.url, f.opcoes)
+        .then(f.parse)
         .then(function (lista) {
-          var novo = lista.filter(function (v) { return v.id; })
+          var novo = lista.filter(function (v) { return v.id && !isNaN(v.data); })
                           .sort(function (a, b) { return b.data - a.data; })[0];
-          if (!novo) throw new Error('sem vídeos');
-          aplicar(novo);
-          try {
-            localStorage.setItem(CACHE, JSON.stringify({ id: novo.id, titulo: novo.titulo, em: Date.now() }));
-          } catch (e) { /* sem localStorage: tudo bem */ }
+          if (!novo) return;
+          var reg = { id: novo.id, titulo: novo.titulo, data: novo.data.getTime(), em: Date.now() };
+          if (atual && atual.data > reg.data) return;
+          if (!atual || atual.id !== reg.id) aplicar(reg);
+          atual = reg;
+          try { localStorage.setItem(CACHE, JSON.stringify(reg)); } catch (e) { /* sem localStorage: tudo bem */ }
         })
-        .catch(function () { tentar(i + 1); });
-    })(0);
+        .catch(function () { /* fonte fora do ar: as outras seguem */ });
+    });
   })();
 
   // vídeo: só carrega o player do YouTube quando clicar (página abre leve)
